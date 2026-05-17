@@ -31,7 +31,7 @@
 	angie: configuration file /etc/angie/angie.conf test is successful
 	5. systemctl reload angie.service
 
-#Docker
+# Docker
 1. sudo docker run --name angie_docker -v /var/www/html:/usr/share/angie/html:ro -v /home/db/angie:/etc/angie:ro -p 8080:80 -d docker.angie.software/angie:1.11.5-ubuntu
 2. root@angie01:~# docker ps -a
 CONTAINER ID   IMAGE                                       COMMAND                  CREATED          STATUS         PORTS                                     NAMES
