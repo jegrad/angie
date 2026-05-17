@@ -34,9 +34,12 @@
 # Docker
 1. sudo docker run --name angie_docker -v /var/www/html:/usr/share/angie/html:ro -v /home/db/angie:/etc/angie:ro -p 8080:80 -d docker.angie.software/angie:1.11.5-ubuntu
 2. root@angie01:~# docker ps -a
+   
 CONTAINER ID   IMAGE                                       COMMAND                  CREATED          STATUS         PORTS                                     NAMES
+
 c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon ofâ€¦"   20 minutes ago   Up 3 minutes   0.0.0.0:8080->80/tcp, [::]:8080->80/tcp   angie_docker
-3. root@angie01:~# curl -I http://localhost:8080
+
+4. root@angie01:~# curl -I http://localhost:8080
 	HTTP/1.1 200 OK
 	Server: Angie/1.11.5
 	Date: Sun, 17 May 2026 10:16:14 GMT
@@ -46,7 +49,7 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon ofâ
 	Connection: keep-alive
 	ETag: "6a099545-238"
 	Accept-Ranges: bytes
-4. root@angie01:~# curl -I http://localhost:8080/status
+5. root@angie01:~# curl -I http://localhost:8080/status
 	HTTP/1.1 301 Moved Permanently
 	Server: Angie/1.11.5
 	Date: Sat, 16 May 2026 19:53:47 GMT
