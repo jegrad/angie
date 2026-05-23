@@ -60,27 +60,27 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
  
 # Миграция Nginx в Angie
 1. root@angie01:/etc/nginx/sites-available# grep -rn '/nginx' /etc/angie
-/etc/angie/default:19:  access_log /var/log/nginx/default.log;
-/etc/angie/default:39:        include /etc/nginx/static-avif.conf;
-/etc/angie/default:45:        include /etc/nginx/static.conf;
+   /etc/angie/default:19:  access_log /var/log/nginx/default.log;
+   /etc/angie/default:39:        include /etc/nginx/static-avif.conf;
+   /etc/angie/default:45:        include /etc/nginx/static.conf;
 
-2. root@angie01:/etc/angie# find . -type f -name '*.conf' -exec sed --follow-symlinks -i 's|/nginx|/angie|g' {} \;
+3. root@angie01:/etc/angie# find . -type f -name '*.conf' -exec sed --follow-symlinks -i 's|/nginx|/angie|g' {} \;
 
-3. root@angie01:/etc/angie# cat script.sh
+4. root@angie01:/etc/angie# cat script.sh
 ln -nsf "$(readlink "/etc/angie/sites-enabled/default" | sed s!/etc/nginx/sites-available!/etc/angie/sites-available!)" "$(echo "/etc/angie/sites-enabled/default" | sed s!/etc/nginx/sites-available!/etc/angie/sites-available!)"
 ln -nsf "$(readlink "/etc/angie/sites-enabled/test1" | sed s!/etc/nginx/sites-available!/etc/angie/sites-available!)" "$(echo "/etc/angie/sites-enabled/test1" | sed s!/etc/nginx/sites-available!/etc/angie/sites-available!)"
 ln -nsf "$(readlink "/etc/angie/sites-enabled/test2" | sed s!/etc/nginx/sites-available!/etc/angie/sites-available!)" "$(echo "/etc/angie/sites-enabled/test2" | sed s!/etc/nginx/sites-available!/etc/angie/sites-available!)"
    
-4. root@angie01:/etc/angie# ./script.sh
-root@angie01:/etc/angie# ll sites-enabled/
-total 8
-drwxr-xr-x 2 root root 4096 May 23 13:10 ./
-drwxr-xr-x 7 root root 4096 May 23 13:05 ../
-lrwxrwxrwx 1 root root   34 May 23 13:10 default -> /etc/angie/sites-available/default
-lrwxrwxrwx 1 root root   32 May 23 13:10 test1 -> /etc/angie/sites-available/test1
-lrwxrwxrwx 1 root root   32 May 23 13:10 test2 -> /etc/angie/sites-available/test2
+6. root@angie01:/etc/angie# ./script.sh
+   root@angie01:/etc/angie# ll sites-enabled/
+   total 8
+   drwxr-xr-x 2 root root 4096 May 23 13:10 ./
+   drwxr-xr-x 7 root root 4096 May 23 13:05 ../
+   lrwxrwxrwx 1 root root   34 May 23 13:10 default -> /etc/angie/sites-available/default
+   lrwxrwxrwx 1 root root   32 May 23 13:10 test1 -> /etc/angie/sites-available/test1
+   lrwxrwxrwx 1 root root   32 May 23 13:10 test2 -> /etc/angie/sites-available/test2
 
-5. root@angie01:/etc/angie/sites-available# angie -t
+8. root@angie01:/etc/angie/sites-available# angie -t
 angie:
 angie: Valid license found:
 angie:   - owner: CN=Angie Client License / Лицензия Angie PRO
@@ -93,14 +93,14 @@ angie:
 angie: the configuration file /etc/angie/angie.conf syntax is ok
 angie: configuration file /etc/angie/angie.conf test is successful
  
-6. Остановили nginx и отключили автозапуск
+9. Остановили nginx и отключили автозапуск
    root@angie01:/etc/angie/sites-available# service nginx status
 ○ nginx.service - A high performance web server and a reverse proxy server
      Loaded: loaded (/usr/lib/systemd/system/nginx.service; disabled; preset: enabled)
      Active: inactive (dead)
        Docs: man:nginx(8)
 
-7. Запуск angie и включили автозапуск
+10. Запуск angie и включили автозапуск
    root@angie01:/etc/angie/sites-available# service angie status
 ● angie.service - Angie - high performance web server
      Loaded: loaded (/usr/lib/systemd/system/angie.service; enabled; preset: enabled)
