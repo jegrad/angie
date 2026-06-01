@@ -159,6 +159,88 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 	</body>
 	</html>
 
+# Статический сайт
+	/etc/angie/angie.conf
+	
+	user angie;
+	worker_processes 2;
+	worker_rlimit_nofile 65536;
+	
+	error_log  /var/log/angie/error.log notice;
+	pid        /run/angie.pid;
+	
+	load_module modules/ngx_http_brotli_filter_module.so;
+	load_module modules/ngx_http_brotli_static_module.so;
+	
+	events {
+	    worker_connections  256;
+	}
+		
+	http {
+	    include       /etc/angie/mime.types;
+	    default_type  application/octet-stream;
+	
+	    access_log  /var/log/angie/access.log  main;
+	
+	    sendfile        on;
+	    keepalive_timeout  65;
+	
+	    gzip on;
+	
+	    include /etc/angie/http.d/*.conf;
+	    include /etc/angie/sites-enabled/*;
+	
+	    map $http_user_agent $limit_search_bots {
+	        default 0;
+	        ~*(google|yandex|bing|wget|msnbot|apachebench|curl) 1;
+	    }
+	}
+
+	/etc/angie/http.d/default.conf
+	
+	server {
+	        listen 80 reuseport default_server;
+	
+	        root /var/www/html;
+	
+	        index index.html index.htm index.php;
+	
+	        server_name _;
+	
+	        return 301 $scheme://$host:8080$request_uri;
+	
+	        if ($limit_search_bots = 1) {
+	                return 401;
+	        }
+	
+	 		# Static files location
+	   		location /images/ {
+	     		root /var/www/html/images/;
+	     		include /etc/angie/static.conf;
+	   		}
+	
+	
+	  		location ~* \.(ttf|eot|svg|woff|woff2|css|js|json|ico|zip|tgz|gz|rar|bz2|doc|docx|xlsx|pptx|xls|exe|pdf|ppt|txt|tar|mid|midi|wav|bmp|rtf|avi|swf|flv|mp3|mp4|fla)$ {
+	        	expires max;
+	        	include /etc/angie/static.conf;
+	  		}
+	
+	  		location ~* \.(jpg|jpeg|gif|png|ico)$ {
+	        	root /var/www/html/images/;
+	        	include /etc/angie/static.conf;
+	  		}
+	
+	  		location /old {
+	        	rewrite ^/old /new permanent;
+	  		}
+	
+	  		location /newsite {
+	        	proxy_pass http://127.0.0.1:8080;
+	        }
+		}
+	
+	/etc/angie/static.conf
+		add_header Cache-Control "max-age=31536000, public, no-transform, immutable";
  
 
 
