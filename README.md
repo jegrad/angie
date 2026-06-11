@@ -242,5 +242,146 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 	/etc/angie/static.conf
 		add_header Cache-Control "max-age=31536000, public, no-transform, immutable";
  
+# Reverse proxy (Angie + Wordpress + MySQL)
+1. Создаем директории для MySQL и Wordpress:
+   
+   		mkdir -p /home/mysql #volume for docker mysql
+		mkdir -p /var/www/html/wordpress #volume for docker wordpress = root path
+		ln -s /etc/angie/sites-available/wordpress /etc/angie/sites-enabled/wordpress #config for wordpress
+2. Используем Angie на хостовой машине как reverse proxy:
+   
+		/etc/angie/sites-available/wordpress
+			server {
+	        		listen 80;
+	        		root /var/www/html/wordpress;
+	
+	        index index.php;
+	
+	        server_name www.wordpress.ru;
+		
+	        if ($limit_search_bots = 1) {
+	                return 401;
+	        }
+	
+	        access_log /var/log/angie/wordpress-access.log;
+	        error_log /var/log/angie/wordpress-error.log;
+	
+	        location / {
+		            try_files $uri $uri/ /index.php?$args;
+		    }
+	
+		# Static files location
+			location ~* \.(ttf|eot|svg|woff|woff2|css|js|json|ico|zip|tgz|gz|rar|bz2|doc|docx|xlsx|pptx|xls|exe|pdf|ppt|txt|tar|mid|midi|wav|bmp|rtf|avi|swf|flv|mp3|mp4|fla)$ {
+				expires max;
+	        	include /etc/angie/static.conf;
+	 	 }
+	
+	  		location ~* \.(jpg|jpeg|gif|png|ico)$ {
+	        	include /etc/angie/static.conf;
+	  	}
+	  
+	  		location =/info.php {
+	        	allow 127.0.0.1;
+	        	allow 87.117.185.72;
+	        	deny all;
+	
+	        	include fastcgi_params;
+	        	fastcgi_param SCRIPT_FILENAME /var/www/html/$fastcgi_script_name;
+	        	fastcgi_pass 127.0.0.1:9000;
+	  	}
+	
+	  		location ~ \.php$ {
+	        	include fastcgi_params;
+	        	fastcgi_param  SCRIPT_FILENAME /var/www/html/$fastcgi_script_name;
+	        	fastcgi_pass 127.0.0.1:9000;
+	        }
+		}
+3. Используем Docker compose для контейнеров Mysql и Wordpress
+   
+		/home/user/docker-compose.yml
+			version: '3'
+			services:
+	  			db:
+	    			image: mysql:8.0
+	    			container_name: db
+	    			restart: always
+	    			env_file: .env
+	    			environment:
+	      			- MYSQL_DATABASE=wordpress
+		    		volumes:
+	    			- /home/mysql:/var/lib/mysql
+	    			command: '--default-authentication-plugin=mysql_native_password'
+	    			networks:
+	  				- app-network
+	
+	  			wordpress:
+	    		depends_on:
+	      		- db
+	    			image: wordpress:fpm
+	    			container_name: wordpress
+	    			restart: always
+	    			env_file: .env
+	    			environment:
+	      			- WORDPRESS_DB_HOST=db:3306
+	      			- WORDPRESS_DB_USER=$MYSQL_USER
+	      			- WORDPRESS_DB_PASSWORD=$MYSQL_PASSWORD
+	      			- WORDPRESS_DB_NAME=wordpress
+	    			volumes:
+	      			- /var/www/html/wordpress:/var/www/html
+	    			ports:
+	      			- "127.0.0.1:9000:9000"
+	    			networks:
+	      			- app-network
+
+		networks:
+	  		app-network:
+	    		driver: bridge
+4. 	/home/user/.env
+   
+    	MYSQL_ROOT_PASSWORD=dfkljs_d324fD_klj
+		MYSQL_USER=wp
+		MYSQL_PASSWORD=KMJ23f9sad_80ds
+5. /home/user/.dockerignore
+    
+   		.env
+6. Загружаем и запускаем контейнеры
+    
+   		/home/user/docker compose up -d
+7. Проверка
+    
+   		root@angie01:/home/user# docker compose ps
+		NAME        IMAGE           COMMAND                  SERVICE     CREATED        STATUS          PORTS
+		db          mysql:8.0       "docker-entrypoint.s…"   db          20 hours ago   Up 17 minutes   3306/tcp, 33060/tcp
+		wordpress   wordpress:fpm   "docker-entrypoint.s…"   wordpress   20 hours ago   Up 17 minutes   127.0.0.1:9000->9000/tcp
+8. Проверка конфигурации и перезапуск Angie
+    
+   		angie -t && service angie reload
+9. Проверка сайта до настройки
+    
+   		root@angie01:/etc/angie/sites-available# curl -I www.wordpress.ru
+		HTTP/1.1 302 Found
+		Server: Angie/1.11.5
+		Date: Thu, 11 Jun 2026 16:36:40 GMT
+		Content-Type: text/html; charset=UTF-8
+		Connection: keep-alive
+		X-Powered-By: PHP/8.3.31
+		Expires: Wed, 11 Jan 1984 05:00:00 GMT
+		Cache-Control: no-cache, must-revalidate, max-age=0, no-store, private
+		X-Redirect-By: WordPress
+		Location: http://www.wordpress.ru/wp-admin/install.php
+10. Проверка сайта после настройки
+    
+   		root@angie01:/home/mysql# curl -I www.wordpress.ru
+		HTTP/1.1 200 OK
+		Server: Angie/1.11.5
+		Date: Thu, 11 Jun 2026 16:42:46 GMT
+		Content-Type: text/html; charset=UTF-8
+		Connection: keep-alive
+		X-Powered-By: PHP/8.3.31
+		Link: <http://www.wordpress.ru/wp-json/>; rel="https://api.w.org/"
+
+
+
+
 
 
