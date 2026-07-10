@@ -489,10 +489,7 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon ofâ
 
 		server {
         listen 80 default_server reuseport;
-
-        http2 on;
-        http3 on;
-
+        
         root /var/www/html/wordpress;
 
         index index.php;
