@@ -570,5 +570,6 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 		add_header Cache-Control $cache_control;
 		try_files $uri$avif_suffix $uri$webp_suffix $uri =404;
 
+6. После оптимизации сайта Lighthouse index: Performance/Accessibility/Best Ptactices/SEO - 100/97/78/54
 
 
