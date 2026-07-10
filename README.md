@@ -380,8 +380,198 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 		X-Powered-By: PHP/8.3.31
 		Link: <http://www.wordpress.ru/wp-json/>; rel="https://api.w.org/"
 
+# Клиентская оптимизация и серверное кэширование
+1. /etc/angie/angie.conf:
 
+		user www-data;
+		worker_processes auto;
+		worker_cpu_affinity auto;
+		worker_rlimit_nofile 65536;
 
+		error_log  /var/log/angie/error.log notice;
+		pid        /run/angie.pid;
+
+		load_module modules/ngx_http_brotli_filter_module.so;
+		load_module modules/ngx_http_brotli_static_module.so;
+
+		load_module modules/ngx_http_zstd_filter_module.so;
+		load_module modules/ngx_http_zstd_static_module.so;
+
+		events {
+    		worker_connections  256;
+		}
+
+		pcre_jit on;
+
+		http {
+    		include       /etc/angie/mime.types;
+    		default_type  application/octet-stream;
+
+    		log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    		log_format extended '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent "$http_referer" rt="$request_time" '
+                        '"$http_user_agent" "$http_x_forwarded_for" '
+                        'h="$host" sn="$server_name" ru="$request_uri" u="$uri" '
+                        'ucs="$upstream_cache_status" ua="$upstream_addr" us="$upstream_status" '
+                        'uct="$upstream_connect_time" urt="$upstream_response_time"';
+
+    		access_log  /var/log/angie/access.log  main;
+
+    		sendfile        on;		# отдача файлов с диска в сетевой сокет по http
+    		tcp_nopush      on;		# накопить данные перед отправкой и передавать полными пакетами
+    		tcp_nodelay     on;		# быстрая отправка данных без задержек
+
+    		reset_timedout_connection on;	# сброс висячих коннектов после таймаута
+
+    		keepalive_timeout  120;		# поддерживать клиентские соединения 120 сек
+    		keepalive_requests 10000;	# максимальное кол-во запросов в одном клиентском соединении
+
+    		send_timeout 10;			# таймаут между запросами для медленных/висячих клиентов
+    		client_body_timeout 10;		# таймаут для тела запросов
+    		client_header_timeout 10;	# таймаут для заголовков запросов
+
+			# серверное кэширование
+    		proxy_cache_valid 1m;
+    		proxy_cache_key $scheme$host$uri;
+    		proxy_cache_path /var/www/cache levels=1:2 keys_zone=one:10m:file=/etc/angie/cache.state inactive=4h max_size=800m;
+
+			# работа с бэкендом
+    		proxy_connect_timeout 5;
+    		proxy_send_timeout 10;
+    		proxy_read_timeout 10;
+
+    		proxy_buffers 64 4k;
+
+			# работа с файлами
+			open_file_cache max=10000 inactive=60s;
+    		open_file_cache_valid 30s;
+   			open_file_cache_min_uses 2;
+
+    		open_log_file_cache max=100 inactive=60s min_uses=2;
+
+			include /etc/angie/sites-enabled/*;
+
+    		map $http_user_agent $limit_search_bots {
+        		default 0;
+        		~*(google|yandex|bing|wget|msnbot|apachebench) 1;
+    		}
+
+			map $http_user_agent $rate {
+				default 0;
+				~*(bot|crawl|wget|python|apachebench|curl) 500k;
+			}
+
+    		map $msie $cache_control {
+        		default "max-age=31536000, public, no-transform, immutable";
+        		"1" "max-age=31536000, private, no-transform, immutable";
+    		}
+
+    		map $msie $vary_header {
+        		default "Accept";
+        		"1" "";
+    		}
+
+    		map $http_accept $webp_suffix {
+        		"~*webp" ".webp";
+    		}
+
+    		map $http_accept $avif_suffix {
+        		"~*avif" ".avif";
+        		"~*webp" ".webp";
+    		}
+
+		}
+ 
+3. /etc/angie/sites-available/wordpress:
+
+		server {
+        listen 80 default_server reuseport;
+
+        http2 on;
+        http3 on;
+
+        root /var/www/html/wordpress;
+
+        index index.php;
+
+        server_name _;
+
+        if ($limit_search_bots = 1) {
+                return 401;
+        }
+
+		# сжатие текстового контента
+        gzip on;
+        gzip_static on;
+        gzip_types text/plain text/css text/xml application/javascript application/json application/msword application/font-ttf;
+        gzip_comp_level 4;
+        gzip_proxied any;
+        gzip_min_length 1000;
+        gzip_disable "msie6";
+        gzip_vary on;
+        gzip_http_version 1.0;
+
+        brotli_static on;
+        brotli on;
+        brotli_comp_level 5;
+        brotli_types text/plain text/css text/xml application/javascript application/json image/x-icon image/svg+xml;
+
+        zstd on;
+        zstd_min_length 256;
+        zstd_comp_level 5;
+        #zstd_static on;
+        zstd_types text/plain text/css text/xml application/javascript application/json image/x-icon image/svg+xml;
+
+        access_log /var/log/angie/wordpress-access.log;
+        error_log /var/log/angie/wordpress-error.log;
+
+        location / {
+            proxy_cache one;
+            proxy_cache_valid 200 1h;
+            proxy_cache_lock on;
+            proxy_cache_min_uses 2;
+            proxy_ignore_headers "X-Accel-Expires" "Cache-Control" "Expires";
+            proxy_cache_use_stale updating error timeout invalid_header http_500 http_502 http_504;
+            proxy_cache_background_update on;
+
+            try_files $uri $uri/ /index.php?$args;
+
+        }
+
+  		# Static files location
+  		location ~* \.(ttf|eot|svg|woff|woff2|css|js|json|ico|zip|tgz|gz|rar|bz2|doc|docx|xlsx|pptx|xls|exe|pdf|ppt|txt|tar|mid|midi|wav|bmp|rtf|avi|swf|flv|mp3|mp4|fla)$ {
+                expires max;
+        	include /etc/angie/static.conf;	
+  		}
+
+  		location ~* \.(jpg|jpeg|gif|png|ico)$ {
+	        include /etc/angie/static.conf;
+  		}
+
+		location ~ \.php$ {
+	        fastcgi_buffering off;
+        	include fastcgi_params;
+        	fastcgi_param SCRIPT_FILENAME /var/www/html/$fastcgi_script_name;
+        	fastcgi_pass 127.0.0.1:9000;
+        }
+
+   		location /img {
+	        include /etc/angie/static-avif.conf;
+   		 }
+		}
+
+4. /etc/angie/static.conf
+   
+   		add_header Cache-Control "max-age=31536000, public, no-transform, immutable";
+   
+5. /etc/angie/static-avif.conf
+   
+   		add_header Vary $vary_header;
+		add_header Cache-Control $cache_control;
+		try_files $uri$avif_suffix $uri$webp_suffix $uri =404;
 
 
 
