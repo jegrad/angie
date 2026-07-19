@@ -572,4 +572,164 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 
 6. После оптимизации сайта Lighthouse index: Performance/Accessibility/Best Ptactices/SEO - 100/97/78/54
 
+# Настройка HTTPS
+1. Создание сертификата Let'sEncrypt через certbot
+
+   		sudo apt install certbot;
+
+   		в angie.conf добавить строку:
+   		location /.well-known/ {
+			root /var/www/html/wordpress;
+   		}
+
+   		certbot certonly --dry-run --webroot -w /var/www/site -d site.ru -d www.site.ru  #тестовый запуск
+
+   		root@angie01:/etc/angie/sites-available# certbot certonly --webroot -w /var/www/html/wordpress/ -d evg.mtdlb.ru
+		Saving debug log to /var/log/letsencrypt/letsencrypt.log
+		Successfully received certificate.
+		Certificate is saved at: /etc/letsencrypt/live/evg.mtdlb.ru/fullchain.pem
+		Key is saved at:         /etc/letsencrypt/live/evg.mtdlb.ru/privkey.pem
+		This certificate expires on 2026-10-12.
+
+2. /etc/angie/sites-available/wordpress:
+
+		# Redirect HTTP (80) на HTTPS (443) 
+		server { 
+		listen 80; 
+	
+		server_name evg.mtdlb.ru; 
+		
+		return 302 https://$host$request_uri; 
+		}
+
+		server {
+        listen 443 ssl;
+   		http2 on;
+   		#http3 не будет работать из-за openssl 3.0.13
+        
+        root /var/www/html/wordpress;
+
+        index index.php;
+
+        server_name evg.mtdlb.ru; 
+
+        if ($limit_search_bots = 1) {
+                return 401;
+        }
+
+		# HSTS
+		add_header Strict-Transport-Security max-age=31536000;
+
+	    ssl_certificate /etc/letsencrypt/live/evg.mtdlb.ru/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/evg.mtdlb.ru/privkey.pem;
+
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_prefer_server_ciphers on;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+		# Восстановление сессий
+		ssl_session_cache shared:SSL:10m;
+		ssl_session_timeout 1h;
+		ssl_session_tickets on;
+
+		# сжатие текстового контента
+        gzip on;
+        gzip_static on;
+        gzip_types text/plain text/css text/xml application/javascript application/json application/msword application/font-ttf;
+        gzip_comp_level 4;
+        gzip_proxied any;
+        gzip_min_length 1000;
+        gzip_disable "msie6";
+        gzip_vary on;
+        gzip_http_version 1.0;
+
+        brotli_static on;
+        brotli on;
+        brotli_comp_level 5;
+        brotli_types text/plain text/css text/xml application/javascript application/json image/x-icon image/svg+xml;
+
+        zstd on;
+        zstd_min_length 256;
+        zstd_comp_level 5;
+        #zstd_static on;
+        zstd_types text/plain text/css text/xml application/javascript application/json image/x-icon image/svg+xml;
+
+        access_log /var/log/angie/wordpress-access.log;
+        error_log /var/log/angie/wordpress-error.log;
+
+        location / {
+            proxy_cache one;
+            proxy_cache_valid 200 1h;
+            proxy_cache_lock on;
+            proxy_cache_min_uses 2;
+            proxy_ignore_headers "X-Accel-Expires" "Cache-Control" "Expires";
+            proxy_cache_use_stale updating error timeout invalid_header http_500 http_502 http_504;
+            proxy_cache_background_update on;
+
+            try_files $uri $uri/ /index.php?$args;
+
+        }
+
+  		# Static files location
+  		location ~* \.(ttf|eot|svg|woff|woff2|css|js|json|ico|zip|tgz|gz|rar|bz2|doc|docx|xlsx|pptx|xls|exe|pdf|ppt|txt|tar|mid|midi|wav|bmp|rtf|avi|swf|flv|mp3|mp4|fla)$ {
+                expires max;
+        	include /etc/angie/static.conf;	
+  		}
+
+  		location ~* \.(jpg|jpeg|gif|png|ico)$ {
+	        include /etc/angie/static.conf;
+  		}
+
+		location ~ \.php$ {
+	        fastcgi_buffering off;
+        	include fastcgi_params;
+        	fastcgi_param SCRIPT_FILENAME /var/www/html/$fastcgi_script_name;
+        	fastcgi_pass 127.0.0.1:9000;
+        }
+
+   		location /img {
+	        include /etc/angie/static-avif.conf;
+   		 }
+		}
+
+3. angie -t && service angie reload
+   
+4. проверка
+
+   			root@angie01:~# curl -vI https://evg.mtdlb.ru
+			* Host evg.mtdlb.ru:443 was resolved.
+			* IPv6: (none)
+			* IPv4: 51.250.106.241
+			*   Trying 51.250.106.241:443...
+			* Connected to evg.mtdlb.ru (51.250.106.241) port 443
+			* ALPN: curl offers h2,http/1.1
+			* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+			*  CAfile: /etc/ssl/certs/ca-certificates.crt
+			*  CApath: /etc/ssl/certs
+			* TLSv1.3 (IN), TLS handshake, Server hello (2):
+			* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):
+			* TLSv1.3 (IN), TLS handshake, Certificate (11):
+			* TLSv1.3 (IN), TLS handshake, CERT verify (15):
+			* TLSv1.3 (IN), TLS handshake, Finished (20):
+			* TLSv1.3 (OUT), TLS change cipher, Change cipher spec (1):
+			* TLSv1.3 (OUT), TLS handshake, Finished (20):
+			* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / X25519 / id-ecPublicKey
+			* ALPN: server accepted h2
+			* Server certificate:
+			*  subject: CN=evg.mtdlb.ru
+			*  start date: Jul 14 15:46:45 2026 GMT
+			*  expire date: Oct 12 15:46:44 2026 GMT
+			*  subjectAltName: host "evg.mtdlb.ru" matched cert's "evg.mtdlb.ru"
+			*  issuer: C=US; O=Let's Encrypt; CN=YE1
+			*  SSL certificate verify ok.
+			*   Certificate level 0: Public key type EC/prime256v1 (256/128 Bits/secBits), signed using ecdsa-with-SHA384
+			*   Certificate level 1: Public key type EC/secp384r1 (384/192 Bits/secBits), signed using ecdsa-with-SHA384
+			*   Certificate level 2: Public key type EC/secp384r1 (384/192 Bits/secBits), signed using ecdsa-with-SHA384
+			*   Certificate level 3: Public key type EC/secp384r1 (384/192 Bits/secBits), signed using ecdsa-with-SHA384
+			* using HTTP/2
+			* [HTTP/2] [1] OPENED stream for https://evg.mtdlb.ru/
+
+   		 
+
+   
 
