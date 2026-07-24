@@ -800,7 +800,7 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 	        			location /favicon {
 	        			}
 					}
-3. Балансировка по хэшу $requet_uri
+3. Балансировка по хэшу $request_uri
 
 	  			/etc/angie/sites-available/balance
 					upstream backend {
@@ -885,6 +885,62 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 			X-Backend-Server: 127.0.0.1:9001
    			curl -sI localhost | grep "X-Backend-Server"
 			X-Backend-Server: 127.0.0.1:9003
+
+7. Резервный бэкенд
+
+			/etc/angie/sites-available/balance
+   			upstream backend {
+    			zone upstream-backend 256k;
+			    server 127.0.0.1:9000 weight=4 sid=white;
+    			server 127.0.0.1:9001 sid=blue backup;
+    			server 127.0.0.1:9002 sid=green;
+    			server 127.0.0.1:9003 weight=2 fail_timeout=1s max_fails=1 sid=gold;
+    			sticky route $arg_route;
+    			sticky_strict on;
+			}
+
+			server {
+        		listen 80 default_server;
+		        server_name _;
+
+        		location / {
+                add_header X-Backend-Server "$upstream_addr" always;
+
+                proxy_pass http://backend;
+
+		    	}
+
+        		location /favicon {
+        		}
+
+        		location /status/ {
+          			api /status/;
+     	   		}
+			}
+
+8. Проверка
+
+			#Отключили бэкенд debug-green
+			docker stop debug-green
+
+			curl -sI localhost/?route=white | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9000
+			curl -sI localhost/?route=gold | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9003
+
+			curl -I localhost/?route=green
+			HTTP/1.1 502 Bad Gateway
+			Server: Angie/1.11.8
+			Date: Fri, 24 Jul 2026 20:31:38 GMT
+			Content-Type: text/html
+			Content-Length: 157
+			Connection: keep-alive
+			X-Backend-Server: 127.0.0.1:9002, backend
+
+
+
+
+
 
    
 			
