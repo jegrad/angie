@@ -846,8 +846,8 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 				    zone upstream-backend 256k;
     				random two least_conn;
 	    			server 127.0.0.1:9000 sid=white;
-	    			server 127.0.0.1:9001 sid=blue;
-	    			server 127.0.0.1:9002 sid=green;
+	    			server 127.0.0.1:9001 sid=blue down;
+	    			server 127.0.0.1:9002 sid=green down;
 	    			server 127.0.0.1:9003 sid=gold;
 					}
 	
@@ -868,23 +868,23 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 6. Проверка
 
     		curl -sI localhost | grep "X-Backend-Server"
-			X-Backend-Server: 127.0.0.1:9002
-			curl -sI localhost | grep "X-Backend-Server"
-			X-Backend-Server: 127.0.0.1:9002
-			curl -sI localhost | grep "X-Backend-Server"
-			X-Backend-Server: 127.0.0.1:9002
-			curl -sI localhost | grep "X-Backend-Server"
-			X-Backend-Server: 127.0.0.1:9001
-			curl -sI localhost | grep "X-Backend-Server"
-			X-Backend-Server: 127.0.0.1:9002
-			curl -sI localhost | grep "X-Backend-Server"
-			X-Backend-Server: 127.0.0.1:9002
-   			curl -sI localhost | grep "X-Backend-Server"
-			X-Backend-Server: 127.0.0.1:9001
-			curl -sI localhost | grep "X-Backend-Server"
-			X-Backend-Server: 127.0.0.1:9001
-   			curl -sI localhost | grep "X-Backend-Server"
 			X-Backend-Server: 127.0.0.1:9003
+			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9003
+			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9003
+			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9000
+			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9003
+			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9000
+   			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9000
+			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9001
+   			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9000
 
 7. Резервный бэкенд
 
@@ -893,7 +893,7 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
     			zone upstream-backend 256k;
 			    server 127.0.0.1:9000 weight=4 sid=white;
     			server 127.0.0.1:9001 sid=blue backup;
-    			server 127.0.0.1:9002 sid=green;
+    			server 127.0.0.1:9002 sid=green down;
     			server 127.0.0.1:9003 weight=2 fail_timeout=1s max_fails=1 sid=gold;
     			sticky route $arg_route;
     			sticky_strict on;
@@ -920,9 +920,6 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 
 8. Проверка
 
-			#Отключили бэкенд debug-green
-			docker stop debug-green
-
 			curl -sI localhost/?route=white | grep "X-Backend-Server"
 			X-Backend-Server: 127.0.0.1:9000
 			curl -sI localhost/?route=gold | grep "X-Backend-Server"
@@ -935,7 +932,7 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 			Content-Type: text/html
 			Content-Length: 157
 			Connection: keep-alive
-			X-Backend-Server: 127.0.0.1:9002, backend
+			X-Backend-Server: backend
 
 
 
