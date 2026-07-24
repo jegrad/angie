@@ -729,6 +729,172 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 			* using HTTP/2
 			* [HTTP/2] [1] OPENED stream for https://evg.mtdlb.ru/
 
+# HTTP балансировка
+1. запустим 4 контейнера webdebugger
+      
+			docker.yml:
+			version: '3'
+	
+			services:
+	  			debug-white:
+	    			image: vscoder/webdebugger
+	    			container_name: debug-white
+	    			restart: unless-stopped
+	    			environment:
+	      				APP_DELAY: 0
+	      				APP_PORT: 8080
+	      				APP_BGCOLOR: white
+	    			ports:
+	      				- "9000:8080"
+	  			debug-blue:
+	    			image: vscoder/webdebugger
+	    			container_name: debug-blue
+	    			restart: unless-stopped
+	    			environment:
+	      				APP_DELAY: 0
+	      				APP_PORT: 8080
+	      				APP_BGCOLOR: skyblue
+	    			ports:
+	      				- "9001:8080"
+	  			debug-green:
+	    			image: vscoder/webdebugger
+	    			container_name: debug-green
+	    			restart: unless-stopped
+	    			environment:
+	      				APP_DELAY: 0
+	      				APP_PORT: 8080
+	      				APP_BGCOLOR: limegreen
+	    			ports:
+	      				- "9002:8080"      
+	  			debug-gold:
+	    			image: vscoder/webdebugger
+	    			container_name: debug-gold
+	    			restart: unless-stopped
+	    			environment:
+	      				APP_DELAY: 0
+	      				APP_PORT: 8080
+	      				APP_BGCOLOR: gold
+	    			ports:
+	      				- "9003:8080"
+	
+			docker compose -f docker.yml up -d
+2. Балансировка round-robin (by default)
+
+				/etc/angie/sites-available/balance
+					upstream backend {
+				    zone upstream-backend 256k;
+	    			server 127.0.0.1:9000 sid=white slow_start=120s;
+	    			server 127.0.0.1:9001 sid=blue slow_start=120s;
+	    			server 127.0.0.1:9002 sid=green slow_start=120s;
+	    			server 127.0.0.1:9003 sid=gold slow_start=120s;
+					}
+	
+					server {
+	        			listen 80 default_server;
+	        			server_name _;
+	
+	        			location / {
+			                proxy_pass http://backend;
+				        }
+	
+	        			location /favicon {
+	        			}
+					}
+3. Балансировка по хэшу $requet_uri
+
+	  			/etc/angie/sites-available/balance
+					upstream backend {
+				    zone upstream-backend 256k;
+      				hash $request_uri consistent; 
+	    			server 127.0.0.1:9000 sid=white;
+	    			server 127.0.0.1:9001 sid=blue;
+	    			server 127.0.0.1:9002 sid=green;
+	    			server 127.0.0.1:9003 sid=gold;
+					}
+	
+					server {
+	        			listen 80 default_server;
+	        			server_name _;
+
+						add_header X-Backend-Server $upstream_addr always;
+						
+	        			location / {
+			                proxy_pass http://backend;
+				        }
+	
+	        			location /favicon {
+	        			}
+					}
+4. Проверка
+
+      			curl -sI localhost/asdfg | grep "X-Backend-Server"
+				X-Backend-Server: 127.0.0.1:9002
+
+				curl -sI localhost/asdert34 | grep "X-Backend-Server"
+				X-Backend-Server: 127.0.0.1:9000
+
+				curl -sI localhost/wdxcvb123 | grep "X-Backend-Server"
+				X-Backend-Server: 127.0.0.1:9001
+
+				curl -sI localhost/qsxc23fg | grep "X-Backend-Server"
+				X-Backend-Server: 127.0.0.1:9003
+
+5. Произвольная балансировка
+
+				/etc/angie/sites-available/balance
+					upstream backend {
+				    zone upstream-backend 256k;
+    				random two least_conn;
+	    			server 127.0.0.1:9000 sid=white;
+	    			server 127.0.0.1:9001 sid=blue;
+	    			server 127.0.0.1:9002 sid=green;
+	    			server 127.0.0.1:9003 sid=gold;
+					}
+	
+					server {
+	        			listen 80 default_server;
+	        			server_name _;
+
+						add_header X-Backend-Server $upstream_addr always;
+						
+	        			location / {
+			                proxy_pass http://backend;
+				        }
+	
+	        			location /favicon {
+	        			}
+					}    			
+
+6. Проверка
+
+    		curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9002
+			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9002
+			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9002
+			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9001
+			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9002
+			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9002
+   			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9001
+			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9001
+   			curl -sI localhost | grep "X-Backend-Server"
+			X-Backend-Server: 127.0.0.1:9003
+
+   
+			
+			
+			
+			
+				
+ 
+
+
    		 
 
    
