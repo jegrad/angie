@@ -1005,7 +1005,7 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
    			cd /etc/fail2ban
   			cp jail.conf jail.local
  			nano /etc/fail2ban/jail.local
-			nginx-limit-req]
+			[nginx-limit-req]
 				port = http, https
 				enabled = true
 				filter = nginx-limit-req
@@ -1040,7 +1040,7 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 8. 	Блокировка ботов по User-Agent
 
 			Добавить в секцию http:
-			map $http_user_agent $limit_bots {
+			map $http_user_agent $limit_search_bots {
 				default 0;
 				~*(BlackWidow|ChinaClaw|Custo|DISCo|Download|Demon|eCatch|EirGrabber|ClaudeBot) 1;
 				~*(Express|WebPictures|ExtractorPro|EyeNetIE|FlashGet|GetRight|GetWeb!) 1;
@@ -1051,8 +1051,8 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 			}
 	
 			Добавить в секцию server:
-			If ($limit_bots = 1) {
-				return 444; 
+			If ($limit_search_bots = 1) {
+				return 421; 
 			}
 
 9. Окончательный server конфиг
