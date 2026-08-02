@@ -934,6 +934,236 @@ c2d2f53ed888   docker.angie.software/angie:1.11.5-ubuntu   "angie -g 'daemon of�
 			Connection: keep-alive
 			X-Backend-Server: backend
 
+# Защита от DoS
+1. Настройка ограничений частоты запросов
+  
+      		В секции http добавить:
+      		limit_req_zone $binary_remote_addr zone=lone:10m rate=10r/s;
+      		В секции server добавить:
+      		limit_req zone=lone burst=50 nodelay;
+   			limit_req_log_level error;
+			limit_req_status 503;
+
+2. Проверка ограничений
+
+    		wrk -d20s -c 10 http://localhost
+
+			tail /var/log/angie/error.log
+				2026/08/02 14:42:21 [error] 13957#13957: *8235 limiting requests, excess: 50.620 by zone "lone", client: 127.0.0.1, server: _, request: "GET / HTTP/1.1", host: "localhost"
+				2026/08/02 14:42:21 [error] 13956#13956: *8227 limiting requests, excess: 50.620 by zone "lone", client: 127.0.0.1, server: _, request: "GET / HTTP/1.1", host: "localhost"
+				2026/08/02 14:42:21 [error] 13956#13956: *8229 limiting requests, excess: 50.620 by zone "lone", client: 127.0.0.1, server: _, request: "GET / HTTP/1.1", host: "localhost"
+				2026/08/02 14:42:21 [error] 13957#13957: *8231 limiting requests, excess: 50.620 by zone "lone", client: 127.0.0.1, server: _, request: "GET / HTTP/1.1", host: "localhost"
+				2026/08/02 14:42:21 [error] 13956#13956: *8215 limiting requests, excess: 50.620 by zone "lone", client: 127.0.0.1, server: _, request: "GET / HTTP/1.1", host: "localhost"
+
+3. Basic HTTP аутентификация
+
+			Установить htpasswd
+   			apt install apache2-utils
+
+   			Создание пользователя
+			htpasswd -c /etc/angie/htpasswd user
+
+   			Добавить в секцию server:
+			auth_basic "Identify yourself";
+			auth_basic_user_file /etc/angie/htpasswd;
+
+   			Проверка 
+			curl -v http://locahost
+			* Connected to localhost (127.0.0.1) port 80
+			> GET / HTTP/1.1
+			> Host: localhost
+			> User-Agent: curl/8.5.0
+			> Accept: */*
+			>
+			< HTTP/1.1 401 Unauthorized
+			< Server: Angie/1.11.8
+			< Date: Sun, 02 Aug 2026 11:55:33 GMT
+			< Content-Type: text/html
+			< Content-Length: 159
+			< Connection: keep-alive
+			< WWW-Authenticate: Basic realm="Identify yourself"
+
+4. Ограничение по ip и логину
+   
+			Добавить в секцию server:
+ 			satisfy all; # (включить оба варианта)
+			allow 127.0.0.1
+			deny all;
+
+6. Проверка
+   
+			tail /var/log/angie/error.log
+			2026/08/02 14:54:54 [error] 19245#19245: *9456 access forbidden by rule, client: 87.117.189.60, server: _, request: "GET / HTTP/1.1", host: "evg.mtdlb.ru"
+			2026/08/02 14:54:56 [error] 19245#19245: *9456 access forbidden by rule, client: 87.117.189.60, server: _, request: "GET / HTTP/1.1", host: "evg.mtdlb.ru"
+			2026/08/02 14:54:56 [error] 19245#19245: *9456 access forbidden by rule, client: 87.117.189.60, server: _, request: "GET / HTTP/1.1", host: "evg.mtdlb.ru"
+			2026/08/02 14:54:57 [error] 19245#19245: *9456 access forbidden by rule, client: 87.117.189.60, server: _, request: "GET / HTTP/1.1", host: "evg.mtdlb.ru"
+			2026/08/02 14:55:03 [error] 19245#19245: *9456 access forbidden by rule, client: 87.117.189.60, server: _, request: "GET /console/ HTTP/1.1", host: "evg.mtdlb.ru"
+   
+7. Fail2ban
+
+			apt install fail2ban
+   			cd /etc/fail2ban
+  			cp jail.conf jail.local
+ 			nano /etc/fail2ban/jail.local
+			nginx-limit-req]
+				port = http, https
+				enabled = true
+				filter = nginx-limit-req
+				action = iptabled-multiport[name=RegLimit, port="http,https", protocol=tcp]  // создается цепочка правил f2b-RegLimit
+				logpath = /var/log/angie/*error.log
+				findtime = 600 
+				bantime = 7200 
+				maxretry =4 
+   			
+			/etc/fail2ban/filter.d/nginx-limit-req.conf
+   			failregex = ^\s*\[[a-z]+\] \d+#\d+: \*\d+ limiting requests, excess: [\d\.]+ by zone "(?:%(ngx_limit_req_zones)s)", client: "<HOST>",
+
+			service fail2ban reload
+
+   			Проверка:
+			root@angie01:/etc/fail2ban# fail2ban-client status
+			Status
+				|- Number of jail:      2
+				`- Jail list:   nginx-limit-req, sshd
+	
+			root@angie01:/etc/fail2ban# fail2ban-client status nginx-limit-req
+			Status for the jail: nginx-limit-req
+				|- Filter
+				|  |- Currently failed: 0
+				|  |- Total failed:     0
+				|  `- File list:        /var/log/angie/wordpress-error.log /var/log/angie/error.log
+				`- Actions
+	   			|- Currently banned: 0
+	   			|- Total banned:     0
+	   			`- Banned IP list:
+
+8. 	Блокировка ботов по User-Agent
+
+			Добавить в секцию http:
+			map $http_user_agent $limit_bots {
+				default 0;
+				~*(BlackWidow|ChinaClaw|Custo|DISCo|Download|Demon|eCatch|EirGrabber|ClaudeBot) 1;
+				~*(Express|WebPictures|ExtractorPro|EyeNetIE|FlashGet|GetRight|GetWeb!) 1;
+				~*(rafula|HMView|HTTrack|Stripper|Sucker|Indy|InterGET|Ninja|JetCar|Spider) 1;
+				~*(GrabNet|NetSpider|Vampire|NetZIP|Octopus|Offlie|PageGrabber|Foto|pavuk) 1;
+				~*(Teleport|VoidEYE|Collector|WebAuto|WebCopier|WebFetch|WebGo|WebLecher|WebReaper) 1;
+				~*(Twengabot|htmlparser|libwww|Python|perl|urllib|scan|email|PycURL|Pyth|PyQ) 1;
+			}
+	
+			Добавить в секцию server:
+			If ($limit_bots = 1) {
+				return 444; 
+			}
+
+9. Окончательный server конфиг
+
+			limit_req_zone $binary_remote_addr zone=lone:10m rate=10r/s;
+
+			upstream backend {
+    		zone upstream-backend 256k;
+		    server 127.0.0.1:9000 sid=white;
+    		server 127.0.0.1:9001 sid=blue;
+    		server 127.0.0.1:9002 sid=green;
+    		server 127.0.0.1:9003 sid=gold;
+			}
+
+			server {
+        		listen 80 default_server;
+        		server_name evg.mtdlb.ru;
+        		return 302 https://$host$request_uri;
+			}
+
+			server {
+        		listen 443 ssl;
+
+        		http2 on;
+
+        		status_zone balance;
+		        server_name evg.mtdlb.ru;
+
+        		auth_basic "Identify yourself";
+        		auth_basic_user_file /etc/angie/htpasswd;
+
+				satisfy any;
+        		allow 127.0.0.1;
+		        allow 87.117.189.60;
+        		deny all;
+
+        		add_header Strict-Transport-Security max-age=300;
+
+        		ssl_session_cache shared:SSL:10m;
+        		ssl_session_timeout 28h;
+
+        		ssl_session_tickets on;
+
+        		ssl_certificate /etc/letsencrypt/live/evg.mtdlb.ru/fullchain.pem;
+        		ssl_certificate_key /etc/letsencrypt/live/evg.mtdlb.ru/privkey.pem;
+
+        		ssl_protocols TLSv1.2 TLSv1.3;
+        		ssl_prefer_server_ciphers on;
+        		ssl_ciphers HIGH:!aNULL:!MD5;
+
+        		location / {
+                add_header X-Backend-Server "$upstream_addr" always;
+
+                proxy_pass http://backend;
+
+                upstream_probe backend_probe
+                        uri=/probe
+                        interval=5s
+                        test=$good
+                        essential
+                        persistent
+                        fails=3
+                        passes=3
+                        max_body=10m
+                        mode=idle;
+
+		        }
+
+				location /console/ {
+
+		        auto_redirect on;
+
+        		alias /usr/share/angie-console-light/html/;
+        		index index.html;
+
+        		location /console/api/ {
+            		api /status/;
+        		}
+
+        		}
+
+		        location /favicon {
+        		}
+
+        		location /status/ {
+          		api /status/;
+        		}
+
+		       limit_req zone=lone burst=50 nodelay;
+   			    limit_req_log_level error;
+   			    limit_req_status 503;
+
+        		if ($limit_search_bots = 1) {
+                	return 421;
+        		}
+
+			}
+
+
+
+
+   			
+
+
+
+	
+
+
+
+
+
 
 
 
